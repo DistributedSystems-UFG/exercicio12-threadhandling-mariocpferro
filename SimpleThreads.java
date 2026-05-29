@@ -28,13 +28,38 @@ public class SimpleThreads {
         }
     }
 
+    private static class PrimeCounter
+        implements Runnable {
+        public void run() {
+            threadMessage("Starting prime number computation...");
+            long count = 0;
+            for (long n = 2; n < Long.MAX_VALUE; n++) {
+                if (Thread.interrupted()) {
+                    threadMessage("Interrupted! Primes found so far: " + count);
+                    return;
+                }
+                if (isPrime(n)) {
+                    count++;
+                }
+            }
+            threadMessage("Computation complete! Total primes found: " + count);
+        }
+
+        private boolean isPrime(long n) {
+            for (long i = 2; i * i <= n; i++) {
+                if (n % i == 0) return false;
+            }
+            return true;
+        }
+    }
+
     public static void main(String args[])
         throws InterruptedException {
 
-        // Delay, in milliseconds before we interrupt MessageLoop thread (default one hour)
         long patience = 1000 * 60 * 60;
 
-        // If command line argument present, gives patience in seconds
+        long cpuPatience = 1000 * 10;
+
         if (args.length > 0) {
             try {
                 patience = Long.parseLong(args[0]) * 1000;
@@ -44,28 +69,50 @@ public class SimpleThreads {
             }
         }
 
+        if (args.length > 1) {
+            try {
+                cpuPatience = Long.parseLong(args[1]) * 1000;
+            } catch (NumberFormatException e) {
+                System.err.println("Second argument must be an integer.");
+                System.exit(1);
+            }
+        }
+
         threadMessage("Starting MessageLoop thread");
         long startTime = System.currentTimeMillis();
         Thread t = new Thread(new MessageLoop());
 
-	// Put the MessageLoop thread to run
         t.start();
 
         threadMessage("Waiting for MessageLoop thread to finish");
-	
-        // loop until MessageLoop thread exits
+
         while (t.isAlive()) {
             threadMessage("Still waiting...");
-            // Wait maximum of 1 second for MessageLoop thread to finish
             t.join(1000);
             if (((System.currentTimeMillis() - startTime) > patience) && t.isAlive()) {
                 threadMessage("Tired of waiting!");
-		// Force the interruption of the MainLoop thread
                 t.interrupt();
-                // ...and wait for it to finish -- shouldn't be long now 
                 t.join();
             }
         }
         threadMessage("Finally!");
+
+        threadMessage("Starting PrimeCounter thread (CPU-intensive)");
+        long cpuStartTime = System.currentTimeMillis();
+        Thread cpuThread = new Thread(new PrimeCounter());
+        cpuThread.start();
+
+        threadMessage("Waiting for PrimeCounter thread to finish");
+
+        while (cpuThread.isAlive()) {
+            threadMessage("CPU task still running...");
+            cpuThread.join(1000);
+            if (((System.currentTimeMillis() - cpuStartTime) > cpuPatience) && cpuThread.isAlive()) {
+                threadMessage("CPU time limit exceeded, interrupting PrimeCounter!");
+                cpuThread.interrupt();
+                cpuThread.join();
+            }
+        }
+        threadMessage("PrimeCounter done!");
     }
 }
